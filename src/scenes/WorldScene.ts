@@ -112,6 +112,10 @@ export class WorldScene implements Scene {
   private shakeAmp = 0
   private message = ''
   private messageTimer = 0
+  /** 死亡状态：结算展示中，任意确认输入重开一局 */
+  private dead = false
+  private deathElapsed = 0
+  private deathStats = { kills: 0, avgLv: 0 }
 
   enter(game: Game): void {
     this.game = game
@@ -133,6 +137,8 @@ export class WorldScene implements Scene {
     this.activeRelic = null
     this.relicTimer = 12
     this.shakeTimer = 0
+    this.dead = false
+    this.deathElapsed = 0
     this.disasters = []
     this.disasterTimer = 25
     this.disasterWarnText = ''
@@ -184,6 +190,8 @@ export class WorldScene implements Scene {
           }
         : null,
       relicTimer: Math.max(0, Math.round(this.relicTimer)),
+      dead: this.dead,
+      deathElapsed: Math.round(this.deathElapsed * 10) / 10,
       disasters: this.disasters.map((d) => ({
         kind: d.kind,
         label: d.label,
@@ -232,6 +240,19 @@ export class WorldScene implements Scene {
 
   update(dt: number): void {
     const game = this.game
+
+    // 死亡结算：世界定格，尸体缓沉，1 秒后任意确认重开（防死亡瞬间误触）
+    if (this.dead) {
+      this.deathElapsed += dt
+      this.player.y = Math.min(this.world.height - 30, this.player.y + 26 * dt)
+      this.updateFloatTexts(dt)
+      this.messageTimer = Math.max(0, this.messageTimer - dt)
+      if (this.deathElapsed > 1 && game.input.confirmJustPressed()) {
+        game.scenes.change('world')
+      }
+      return
+    }
+
     this.handleDebugFormKeys(game.input)
     this.handleShardInput(game.input)
     this.handleSkillInput(game.input)
@@ -296,9 +317,15 @@ export class WorldScene implements Scene {
     this.updateFloatTexts(dt)
 
     if (this.player.hp <= 0) {
-      this.player.respawn()
-      this.camera.snap(this.player.x, this.player.y, game.width, game.height)
-      this.showMessage('力竭……回到出生点')
+      // 死亡：进入结算，进度随重开清零（roguelike 局内制）
+      this.dead = true
+      this.deathElapsed = 0
+      this.deathStats = {
+        kills: this.kills,
+        avgLv: Math.round(this.avgAbilityLv() * 10) / 10,
+      }
+      this.doShake(0.9)
+      this.showMessage('力竭而亡……')
     }
 
     this.camera.update(dt, this.player.x, this.player.y, game.width, game.height)
@@ -1158,8 +1185,42 @@ export class WorldScene implements Scene {
     this.drawFloatTexts(ctx)
     ctx.restore()
 
+    if (this.dead) {
+      this.drawDeathOverlay(ctx, game)
+      return
+    }
     this.drawHud(ctx, game)
     drawControls(ctx, game.input, width, height, this.player.skills)
+  }
+
+  /** 死亡结算遮罩：本局战绩 + 重开提示 */
+  private drawDeathOverlay(ctx: CanvasRenderingContext2D, game: Game): void {
+    const a = Math.min(0.78, this.deathElapsed / 1.2)
+    ctx.fillStyle = `rgba(4, 10, 18, ${a})`
+    ctx.fillRect(0, 0, game.width, game.height)
+    if (this.deathElapsed < 0.4) return
+    const cx = game.width / 2
+    const cy = game.height * 0.38
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#ff8866'
+    ctx.font = 'bold 44px system-ui, sans-serif'
+    ctx.fillText('力竭而亡', cx, cy)
+    ctx.fillStyle = 'rgba(234, 246, 255, 0.85)'
+    ctx.font = '18px system-ui, sans-serif'
+    ctx.fillText(
+      `本局击杀 ${this.deathStats.kills} · 平均能力等级 ${this.deathStats.avgLv}`,
+      cx,
+      cy + 46,
+    )
+    ctx.fillStyle = 'rgba(234, 246, 255, 0.55)'
+    ctx.font = '14px system-ui, sans-serif'
+    ctx.fillText('重开将清空本局全部进化进度', cx, cy + 74)
+    if (this.deathElapsed > 1 && Math.sin(this.deathElapsed * 4) > -0.2) {
+      ctx.fillStyle = '#7fd8ff'
+      ctx.font = 'bold 22px system-ui, sans-serif'
+      ctx.fillText('点按任意处 · 重新开始', cx, cy + 130)
+    }
+    ctx.textAlign = 'left'
   }
 
   private drawFloatTexts(ctx: CanvasRenderingContext2D): void {

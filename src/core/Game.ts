@@ -1,17 +1,16 @@
 import { InputManager } from './Input'
-import { SaveManager } from './Storage'
 import { SceneManager } from './SceneManager'
 import { TitleScene } from '../scenes/TitleScene'
 import { WorldScene } from '../scenes/WorldScene'
 
 /**
- * 游戏主对象：负责画布尺寸、主循环和全局系统（输入/存档/场景）。
+ * 游戏主对象：负责画布尺寸、主循环和全局系统（输入/场景）。
  * 具体玩法逻辑放在各个 Scene 中，Game 本身不关心游戏内容。
+ * 纯局内体验：不做持久化存档，死亡由场景自行处理重开。
  */
 export class Game {
   readonly ctx: CanvasRenderingContext2D
   readonly input: InputManager
-  readonly saves: SaveManager
   readonly scenes: SceneManager
 
   /** 逻辑尺寸（CSS 像素），随窗口变化；游戏对象直接使用该坐标系 */
@@ -28,7 +27,6 @@ export class Game {
     this.ctx = ctx
 
     this.input = new InputManager(canvas)
-    this.saves = new SaveManager()
     this.scenes = new SceneManager(this)
 
     this.scenes.register(new TitleScene())

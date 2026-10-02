@@ -40,8 +40,6 @@ export class Player {
   /** 本帧是否发起了咬击（场景消费后清零） */
   justBit = false
   private biteCooldownLeft = 0
-  /** 复活后短暂无敌闪烁 */
-  private invulnTimer = 0
   /** 受击/复活共用无敌帧 */
   private hitInvuln = 0
   /** 中毒剩余时间 */
@@ -96,7 +94,6 @@ export class Player {
 
   get invulnerable(): boolean {
     return (
-      this.invulnTimer > 0 ||
       this.hitInvuln > 0 ||
       this.slotActive('invuln')
     )
@@ -190,20 +187,9 @@ export class Player {
     this.paralysisTimer = Math.max(this.paralysisTimer, duration)
   }
 
-  respawn(): void {
-    this.x = this.world.spawnX
-    this.y = this.world.spawnY
-    this.vx = 0
-    this.vy = 0
-    this.hp = this.maxHp
-    this.state = 'swim'
-    this.invulnTimer = 2
-  }
-
   update(dt: number, input: InputManager): void {
     this.animTime += dt
     this.biteTimer = Math.max(0, this.biteTimer - dt)
-    this.invulnTimer = Math.max(0, this.invulnTimer - dt)
     this.hitInvuln = Math.max(0, this.hitInvuln - dt)
     for (const s of this.skills) {
       if (s.cd > 0) s.cd -= dt
@@ -402,7 +388,7 @@ export class Player {
     if (mouthOpen > 0.02) ctx.translate(this.facing * s * 0.25 * mouthOpen, 0)
     ctx.scale(this.facing, 1)
     ctx.rotate(pitch)
-    if (this.invulnTimer > 0 && Math.sin(this.animTime * 24) > 0) ctx.globalAlpha = 0.45
+    if (this.hitInvuln > 0 && Math.sin(this.animTime * 24) > 0) ctx.globalAlpha = 0.45
 
     drawPlayerFish(ctx, {
       s,
