@@ -1186,11 +1186,26 @@ export class WorldScene implements Scene {
     ctx.restore()
 
     if (this.dead) {
+      ctx.save()
+      ctx.translate(game.safeArea.left, game.safeArea.top)
       this.drawDeathOverlay(ctx, game)
+      ctx.restore()
       return
     }
+    ctx.save()
+    ctx.translate(game.safeArea.left, game.safeArea.top)
     this.drawHud(ctx, game)
-    drawControls(ctx, game.input, width, height, this.player.skills)
+    ctx.restore()
+    ctx.save()
+    ctx.translate(game.safeArea.left, 0)
+    drawControls(
+      ctx,
+      game.input,
+      game.width - game.safeArea.left - game.safeArea.right,
+      game.height,
+      this.player.skills,
+    )
+    ctx.restore()
   }
 
   /** 死亡结算遮罩：本局战绩 + 重开提示 */

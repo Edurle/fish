@@ -13,6 +13,17 @@ export class TitleScene implements Scene {
 
   exit(): void {}
 
+  /** iOS Safari 不支持网页全屏：提示添加到主屏幕以获得 standalone 全屏体验 */
+  private get showIosHint(): boolean {
+    const nav = navigator as Navigator & { standalone?: boolean }
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    const standalone =
+      nav.standalone === true || window.matchMedia('(display-mode: standalone)').matches
+    return isIOS && !standalone
+  }
+
   update(dt: number): void {
     this.elapsed += dt
     if (this.game.input.confirmJustPressed()) {
@@ -47,6 +58,13 @@ export class TitleScene implements Scene {
       ctx.fillStyle = '#7fd8ff'
       ctx.font = 'bold 26px system-ui, sans-serif'
       ctx.fillText('点按任意处开始探索', width / 2, height * 0.8)
+    }
+
+    // iOS Safari 无法网页全屏：引导添加到主屏幕
+    if (this.showIosHint) {
+      ctx.fillStyle = 'rgba(255, 226, 150, 0.92)'
+      ctx.font = 'bold 15px system-ui, sans-serif'
+      ctx.fillText('iPhone 完整全屏：Safari 分享 ⬆︎ → 添加到主屏幕，从主屏图标进入', width / 2, height * 0.9)
     }
   }
 }

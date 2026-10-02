@@ -16,10 +16,13 @@ export class Game {
   /** 逻辑尺寸（CSS 像素），随窗口变化；游戏对象直接使用该坐标系 */
   width = 0
   height = 0
+  /** 刘海/灵动岛安全区（standalone 全屏模式下的 HUD 偏移） */
+  readonly safeArea = { top: 0, left: 0, right: 0 }
 
   private rafId = 0
   private lastTime = 0
   private running = false
+  private safeProbe: HTMLDivElement
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d')
@@ -35,6 +38,11 @@ export class Game {
 
     window.addEventListener('resize', () => this.resize())
     window.addEventListener('orientationchange', () => this.resize())
+    // 安全区探针：读取 env(safe-area-inset-*)（viewport-fit=cover + standalone 模式生效）
+    this.safeProbe = document.createElement('div')
+    this.safeProbe.style.cssText =
+      'position:fixed;top:0;left:0;right:0;width:100vw;height:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);visibility:hidden;pointer-events:none'
+    document.body.appendChild(this.safeProbe)
     // 触摸设备：任意首次点按进入全屏并尝试锁定横屏（须在用户手势事件内同步请求）
     this.canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch' && !document.fullscreenElement) {
@@ -70,6 +78,10 @@ export class Game {
     this.canvas.width = Math.round(this.width * dpr)
     this.canvas.height = Math.round(this.height * dpr)
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    const style = getComputedStyle(this.safeProbe)
+    this.safeArea.top = parseFloat(style.height) || 0
+    this.safeArea.left = parseFloat(style.paddingLeft) || 0
+    this.safeArea.right = parseFloat(style.paddingRight) || 0
   }
 
   private loop = (now: number): void => {
