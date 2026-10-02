@@ -39,8 +39,8 @@ export class TitleScene implements Scene {
 
     ctx.font = '15px system-ui, sans-serif'
     ctx.fillStyle = 'rgba(234, 246, 255, 0.6)'
-    ctx.fillText('电脑：WASD 移动 · 空格/鼠标 撕咬 · G 键调试加能力经验', width / 2, height * 0.58)
-    ctx.fillText('手机：左半屏摇杆移动 · 右侧按住攻击', width / 2, height * 0.58 + 26)
+    ctx.fillText('电脑：WASD 移动 · 空格/鼠标 撕咬 · Q/E/R 释放技能 · G 键调试', width / 2, height * 0.58)
+    ctx.fillText('手机：横屏游玩（点按自动全屏）· 左半屏摇杆 · 右侧攻击 · 技能栏按钮', width / 2, height * 0.58 + 26)
     ctx.fillText('击败生物吃肉进化——吃翼肉长翼，吃肢肉长腿，各走各的进化路线', width / 2, height * 0.58 + 52)
 
     if (Math.sin(this.elapsed * 4) > -0.2) {

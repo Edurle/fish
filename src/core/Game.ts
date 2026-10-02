@@ -37,6 +37,17 @@ export class Game {
 
     window.addEventListener('resize', () => this.resize())
     window.addEventListener('orientationchange', () => this.resize())
+    // 触摸设备：任意首次点按进入全屏并尝试锁定横屏（须在用户手势事件内同步请求）
+    this.canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' && !document.fullscreenElement) {
+        void document.documentElement.requestFullscreen?.().catch(() => {})
+        // 实验性 API：部分浏览器（iOS Safari）不支持锁定，失败即忽略
+        const orientation = screen.orientation as ScreenOrientation & {
+          lock?: (o: string) => Promise<void>
+        }
+        orientation.lock?.('landscape').catch(() => {})
+      }
+    })
     this.resize()
   }
 
@@ -70,7 +81,39 @@ export class Game {
     this.lastTime = now
     this.scenes.update(dt)
     this.scenes.render()
+    this.drawPortraitOverlay()
     this.input.endFrame()
     this.rafId = requestAnimationFrame(this.loop)
+  }
+
+  /** 触摸设备竖屏时全屏遮罩提示旋转（横屏锁定不被支持的浏览器 fallback） */
+  private drawPortraitOverlay(): void {
+    const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (!touch || this.width > this.height * 1.05) return
+    const ctx = this.ctx
+    ctx.fillStyle = 'rgba(4, 14, 26, 0.94)'
+    ctx.fillRect(0, 0, this.width, this.height)
+    // 旋转的手机示意
+    ctx.save()
+    ctx.translate(this.width / 2, this.height * 0.4)
+    ctx.rotate(Math.sin(performance.now() / 500) * 0.4 - Math.PI / 2)
+    ctx.strokeStyle = '#7fd8ff'
+    ctx.lineWidth = 5
+    ctx.lineJoin = 'round'
+    const w = Math.min(this.width * 0.3, 96)
+    ctx.strokeRect(-w / 2, -w * 0.9, w, w * 1.8)
+    ctx.fillStyle = '#7fd8ff'
+    ctx.beginPath()
+    ctx.arc(0, w * 0.66, 6, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+    ctx.fillStyle = '#eaf6ff'
+    ctx.font = 'bold 22px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('请旋转手机至横屏游玩', this.width / 2, this.height * 0.64)
+    ctx.font = '14px system-ui, sans-serif'
+    ctx.fillStyle = 'rgba(234, 246, 255, 0.6)'
+    ctx.fillText('大鱼吃小鱼 · 开放世界', this.width / 2, this.height * 0.64 + 30)
+    ctx.textAlign = 'left'
   }
 }

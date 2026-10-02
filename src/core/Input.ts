@@ -16,8 +16,11 @@ const JOYSTICK_DEAD_ZONE = 0.16
 /** 屏幕左 55% 为摇杆区，其余为攻击区（触屏）；鼠标按下一律视为攻击 */
 const JOYSTICK_AREA = 0.55
 
-/** 技能按钮：屏幕右下（相对攻击钮上方），ControlView 绘制与触摸判定共用 */
-export const SKILL_BUTTON = { offsetX: 92, offsetY: 186, r: 34 }
+/** 技能栏按钮：攻击钮上方横排三个，ControlView 绘制与触摸判定共用 */
+export const SKILL_BUTTONS = { anchorX: 110, offsetY: 186, spacing: 68, r: 27 }
+
+/** 技能栏槽位对应的键位 */
+const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyR']
 
 /**
  * 统一输入：
@@ -41,7 +44,7 @@ export class InputManager {
   private attackPointerIds = new Set<number>()
   private mouseAttackDown = false
   private attackJustPressedFlag = false
-  private skillJustPressedFlag = false
+  private skillSlotPressFlags = [false, false, false]
   /** 最近一次按下的屏幕坐标（供 HUD 面板点击判定） */
   readonly lastPointerDown = { x: 0, y: 0 }
 
@@ -71,12 +74,14 @@ export class InputManager {
       const y = e.clientY - rect.top
       this.lastPointerDown.x = x
       this.lastPointerDown.y = y
-      // 技能按钮区（攻击钮上方）：只触发技能，不记攻击/摇杆
-      const sbx = canvas.clientWidth - SKILL_BUTTON.offsetX
-      const sby = canvas.clientHeight - SKILL_BUTTON.offsetY
-      if (Math.hypot(x - sbx, y - sby) < SKILL_BUTTON.r + 12) {
-        this.skillJustPressedFlag = true
-        return
+      // 技能栏按钮区（攻击钮上方横排三钮）：触发对应槽位，不记攻击/摇杆
+      const by = canvas.clientHeight - SKILL_BUTTONS.offsetY
+      for (let i = 0; i < 3; i++) {
+        const bx = canvas.clientWidth - SKILL_BUTTONS.anchorX + (i - 1) * SKILL_BUTTONS.spacing
+        if (Math.hypot(x - bx, y - by) < SKILL_BUTTONS.r + 10) {
+          this.skillSlotPressFlags[i] = true
+          return
+        }
       }
       if (
         e.pointerType !== 'mouse' &&
@@ -172,9 +177,12 @@ export class InputManager {
     return this.attackJustPressedFlag || this.justPressedKeys.has('Space')
   }
 
-  /** 技能释放信号：技能按钮或 R 键 */
-  skillJustPressed(): boolean {
-    return this.skillJustPressedFlag || this.justPressedKeys.has('KeyR')
+  /** 技能释放信号：返回本帧按下的技能栏槽位（0-2），无则 null（技能钮或 Q/E/R 键） */
+  skillSlotPressed(): number | null {
+    for (let i = 0; i < 3; i++) {
+      if (this.skillSlotPressFlags[i] || this.justPressedKeys.has(SKILL_KEYS[i])) return i
+    }
+    return null
   }
 
   /** 场景在点击被 UI（如能力面板）消费时调用，避免同帧触发咬击 */
@@ -190,6 +198,6 @@ export class InputManager {
   endFrame(): void {
     this.justPressedKeys.clear()
     this.attackJustPressedFlag = false
-    this.skillJustPressedFlag = false
+    this.skillSlotPressFlags = [false, false, false]
   }
 }

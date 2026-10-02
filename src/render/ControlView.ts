@@ -1,13 +1,21 @@
-import { SKILL_BUTTON, type InputManager } from '../core/Input'
+import { SKILL_BUTTONS, type InputManager } from '../core/Input'
 import { SKILL_DEFS, type SkillKind } from '../entities/Skill'
 
-/** 屏幕空间绘制：浮动摇杆（触摸时）+ 常驻攻击钮 + 技能钮 */
+/** 技能栏槽位在屏幕上的圆心 */
+export function skillSlotPos(viewW: number, viewH: number, index: number): { x: number; y: number } {
+  return {
+    x: viewW - SKILL_BUTTONS.anchorX + (index - 1) * SKILL_BUTTONS.spacing,
+    y: viewH - SKILL_BUTTONS.offsetY,
+  }
+}
+
+/** 屏幕空间绘制：浮动摇杆（触摸时）+ 常驻攻击钮 + 技能栏（三钮） */
 export function drawControls(
   ctx: CanvasRenderingContext2D,
   input: InputManager,
   viewW: number,
   viewH: number,
-  skill?: { kind: SkillKind | null; cd: number },
+  skills?: Array<{ kind: SkillKind | null; cd: number }>,
 ): void {
   const joy = input.joystick
   if (joy.active) {
@@ -48,31 +56,36 @@ export function drawControls(
   ctx.textBaseline = 'middle'
   ctx.fillText('咬', ax, ay + 1)
 
-  // 技能钮（攻击钮上方）
-  const sx = viewW - SKILL_BUTTON.offsetX
-  const sy = viewH - SKILL_BUTTON.offsetY
-  const r = SKILL_BUTTON.r
-  const kind = skill?.kind ?? null
-  const def = kind ? SKILL_DEFS[kind] : null
-  const cdRatio = def ? Math.min(1, (skill?.cd ?? 0) / def.cooldown) : 0
-  ctx.beginPath()
-  ctx.arc(sx, sy, r, 0, Math.PI * 2)
-  ctx.fillStyle = def && cdRatio <= 0 ? `${def.color}66` : 'rgba(255, 255, 255, 0.1)'
-  ctx.fill()
-  ctx.strokeStyle = def && cdRatio <= 0 ? def.color : 'rgba(255, 255, 255, 0.35)'
-  ctx.lineWidth = 3
-  ctx.stroke()
-  // 冷却扇形遮罩（顺时针恢复）
-  if (cdRatio > 0) {
+  // 技能栏：三钮横排，键位角标 Q/E/R，冷却扇形遮罩
+  const keyLabels = ['Q', 'E', 'R']
+  for (let i = 0; i < 3; i++) {
+    const { x: sx, y: sy } = skillSlotPos(viewW, viewH, i)
+    const r = SKILL_BUTTONS.r
+    const kind = skills?.[i]?.kind ?? null
+    const def = kind ? SKILL_DEFS[kind] : null
+    const cdRatio = def ? Math.min(1, (skills?.[i]?.cd ?? 0) / def.cooldown) : 0
     ctx.beginPath()
-    ctx.moveTo(sx, sy)
-    ctx.arc(sx, sy, r - 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio)
-    ctx.closePath()
-    ctx.fillStyle = 'rgba(6, 18, 31, 0.6)'
+    ctx.arc(sx, sy, r, 0, Math.PI * 2)
+    ctx.fillStyle = def && cdRatio <= 0 ? `${def.color}66` : 'rgba(255, 255, 255, 0.1)'
     ctx.fill()
+    ctx.strokeStyle = def && cdRatio <= 0 ? def.color : 'rgba(255, 255, 255, 0.35)'
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+    if (cdRatio > 0) {
+      ctx.beginPath()
+      ctx.moveTo(sx, sy)
+      ctx.arc(sx, sy, r - 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cdRatio)
+      ctx.closePath()
+      ctx.fillStyle = 'rgba(6, 18, 31, 0.6)'
+      ctx.fill()
+    }
+    ctx.fillStyle = def && cdRatio <= 0 ? '#fff' : 'rgba(255, 255, 255, 0.5)'
+    ctx.font = 'bold 13px system-ui, sans-serif'
+    ctx.fillText(kind ? SKILL_DEFS[kind].name : '空', sx, sy + 1)
+    // 键位角标
+    ctx.fillStyle = 'rgba(234, 246, 255, 0.55)'
+    ctx.font = 'bold 10px system-ui, sans-serif'
+    ctx.fillText(keyLabels[i], sx + r - 6, sy - r + 6)
   }
-  ctx.fillStyle = def && cdRatio <= 0 ? '#fff' : 'rgba(255, 255, 255, 0.5)'
-  ctx.font = 'bold 15px system-ui, sans-serif'
-  ctx.fillText(kind ? SKILL_DEFS[kind].name : '技', sx, sy + 1)
   ctx.textBaseline = 'alphabetic'
 }

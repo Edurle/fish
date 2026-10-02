@@ -52,12 +52,12 @@ export class Player {
 
   /** 能力效果（等级驱动，场景升级后刷新） */
   effects: AbilityEffects = computeEffects(createAbilities())
-  /** 主动技能：宝箱/技能书获得（kind 为空表示未持有），场景驱动释放 */
-  readonly skill: { kind: SkillKind | null; cd: number; active: number } = {
-    kind: null,
-    cd: 0,
-    active: 0,
-  }
+  /** 技能栏（三槽）：宝箱/技能书获得，空槽填入、满栏时淘汰最旧；场景驱动释放 */
+  readonly skills: Array<{ kind: SkillKind | null; cd: number; active: number }> = [
+    { kind: null, cd: 0, active: 0 },
+    { kind: null, cd: 0, active: 0 },
+    { kind: null, cd: 0, active: 0 },
+  ]
   /** 护盾技能剩余吸收量（>0 时受伤先扣盾） */
   shieldValue = 0
 
@@ -98,33 +98,44 @@ export class Player {
     return (
       this.invulnTimer > 0 ||
       this.hitInvuln > 0 ||
-      (this.skill.kind === 'invuln' && this.skill.active > 0)
+      this.slotActive('invuln')
     )
+  }
+
+  /** 指定技能是否在任一槽位生效中 */
+  private slotActive(kind: SkillKind): boolean {
+    return this.skills.some((s) => s.kind === kind && s.active > 0)
   }
 
   /** 疾速技能生效中 */
   get surgeActive(): boolean {
-    return this.skill.kind === 'surge' && this.skill.active > 0
+    return this.slotActive('surge')
   }
 
-  /** 隐身生效中：敌人不再察觉玩家 */
+  /** 隐身生效中：敌人无法察觉玩家 */
   get stealthActive(): boolean {
-    return this.skill.kind === 'stealth' && this.skill.active > 0
+    return this.slotActive('stealth')
   }
 
   /** 磁力生效中：吸取掉落物 */
   get magnetActive(): boolean {
-    return this.skill.kind === 'magnet' && this.skill.active > 0
+    return this.slotActive('magnet')
   }
 
   /** 血刃生效中：撕咬 ×2 且吸血 */
   get bloodlustActive(): boolean {
-    return this.skill.kind === 'bloodlust' && this.skill.active > 0
+    return this.slotActive('bloodlust')
   }
 
   /** 护盾生效中 */
   get shieldActive(): boolean {
-    return this.skill.kind === 'shield' && this.skill.active > 0 && this.shieldValue > 0
+    return this.slotActive('shield') && this.shieldValue > 0
+  }
+
+  /** 破盾：结束护盾槽位的持续时间 */
+  private deactivateShieldSlot(): void {
+    const slot = this.skills.find((s) => s.kind === 'shield')
+    if (slot) slot.active = 0
   }
 
   get poisoned(): boolean {
@@ -143,7 +154,7 @@ export class Player {
       const absorbed = Math.min(this.shieldValue, remaining)
       this.shieldValue -= absorbed
       remaining -= absorbed
-      if (this.shieldValue <= 0) this.skill.active = 0
+      if (this.shieldValue <= 0) this.deactivateShieldSlot()
       if (remaining <= 0.01) return true
     }
     this.hp -= remaining
@@ -164,7 +175,7 @@ export class Player {
       const absorbed = Math.min(this.shieldValue, remaining)
       this.shieldValue -= absorbed
       remaining -= absorbed
-      if (this.shieldValue <= 0) this.skill.active = 0
+      if (this.shieldValue <= 0) this.deactivateShieldSlot()
       if (remaining <= 0.01) return
     }
     this.hp -= remaining
@@ -194,8 +205,10 @@ export class Player {
     this.biteTimer = Math.max(0, this.biteTimer - dt)
     this.invulnTimer = Math.max(0, this.invulnTimer - dt)
     this.hitInvuln = Math.max(0, this.hitInvuln - dt)
-    if (this.skill.cd > 0) this.skill.cd -= dt
-    if (this.skill.active > 0) this.skill.active -= dt
+    for (const s of this.skills) {
+      if (s.cd > 0) s.cd -= dt
+      if (s.active > 0) s.active -= dt
+    }
     // 生命力：缓慢恢复（中毒/搁浅的持续损失仍照常结算）
     if (this.hp > 0 && this.hp < this.maxHp) {
       this.hp = Math.min(this.maxHp, this.hp + this.effects.hpRegen * dt)
@@ -402,7 +415,7 @@ export class Player {
     // 隐身：整体半透明
     if (this.stealthActive) ctx.globalAlpha *= 0.45
     // 状态特效（中毒绿泡 / 麻痹电火花 / 技能光环）
-    if (this.skill.kind === 'invuln' && this.skill.active > 0) {
+    if (this.slotActive('invuln')) {
       ctx.strokeStyle = `rgba(255, 215, 106, ${0.55 + 0.45 * Math.sin(this.animTime * 18)})`
       ctx.lineWidth = 4
       ctx.beginPath()

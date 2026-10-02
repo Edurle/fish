@@ -144,9 +144,11 @@ export class WorldScene implements Scene {
     this.skillFx = []
     this.skillFields = []
     this.tsunamiWaves = []
-    this.player.skill.kind = null
-    this.player.skill.cd = 0
-    this.player.skill.active = 0
+    for (const s of this.player.skills) {
+      s.kind = null
+      s.cd = 0
+      s.active = 0
+    }
     this.player.shieldValue = 0
     this.bosses = BOSS_DEFS.map((def) => new Boss(def, this.avgAbilityLv()))
     this.camera.snap(this.player.x, this.player.y, game.width, game.height)
@@ -204,11 +206,11 @@ export class WorldScene implements Scene {
           : null
       })(),
       eliteTimer: Math.max(0, Math.round(this.eliteTimer)),
-      skill: {
-        kind: this.player.skill.kind,
-        cd: Math.round(this.player.skill.cd * 10) / 10,
-        active: Math.round(this.player.skill.active * 10) / 10,
-      },
+      skill: this.player.skills.map((s) => ({
+        kind: s.kind,
+        cd: Math.round(s.cd * 10) / 10,
+        active: Math.round(s.active * 10) / 10,
+      })),
       chest: this.chest
         ? { x: Math.round(this.chest.x), y: Math.round(this.chest.y), remain: Math.round(this.chest.remain) }
         : null,
@@ -447,30 +449,40 @@ export class WorldScene implements Scene {
     }
   }
 
-  /** 授予技能（替换当前技能槽） */
+  /** 授予技能：填入第一个空槽，满栏时淘汰最旧的槽位 */
   private grantSkill(kind: SkillKind, source: string): void {
     const def = SKILL_DEFS[kind]
-    this.player.skill.kind = kind
-    this.player.skill.cd = 0
-    this.player.skill.active = 0
+    let slot = this.player.skills.find((s) => s.kind === null)
+    let replacedNote = ''
+    if (!slot) {
+      const dropped = this.player.skills.shift()
+      replacedNote = dropped?.kind ? `（顶替【${SKILL_DEFS[dropped.kind].name}】）` : ''
+      this.player.skills.push({ kind: null, cd: 0, active: 0 })
+      slot = this.player.skills[2]
+    }
+    slot.kind = kind
+    slot.cd = 0
+    slot.active = 0
     this.addFloatText(this.player.x, this.player.y - 46, `【${def.name}】`, def.color)
-    this.showMessage(`${source}：习得技能【${def.name}】——${def.desc}（按 R / 技能钮释放）`)
+    this.showMessage(`${source}：习得技能【${def.name}】${replacedNote}——${def.desc}（Q/E/R 或技能栏释放）`)
   }
 
-  /** 技能释放输入 */
+  /** 技能释放输入：按槽位触发 */
   private handleSkillInput(input: InputManager): void {
-    if (input.skillJustPressed()) this.useSkill()
+    const slot = input.skillSlotPressed()
+    if (slot !== null) this.useSkill(slot)
   }
 
-  private useSkill(): void {
+  private useSkill(slotIndex: number): void {
     const p = this.player
-    const kind = p.skill.kind
-    if (!kind || p.skill.cd > 0 || p.hp <= 0) return
+    const slot = p.skills[slotIndex]
+    const kind = slot?.kind
+    if (!slot || !kind || slot.cd > 0 || p.hp <= 0) return
     const def = SKILL_DEFS[kind]
-    p.skill.cd = def.cooldown
+    slot.cd = def.cooldown
     switch (kind) {
       case 'surge':
-        p.skill.active = 4
+        slot.active = 4
         this.addFloatText(p.x, p.y - 40, '疾速！', def.color)
         break
       case 'heal': {
@@ -480,20 +492,20 @@ export class WorldScene implements Scene {
         break
       }
       case 'invuln':
-        p.skill.active = 2.5
+        slot.active = 2.5
         this.addFloatText(p.x, p.y - 40, '金身！', def.color)
         break
       case 'stealth':
-        p.skill.active = 3.5
+        slot.active = 3.5
         this.addFloatText(p.x, p.y - 40, '隐身！', def.color)
         break
       case 'shield':
         p.shieldValue = 90
-        p.skill.active = 12
+        slot.active = 12
         this.addFloatText(p.x, p.y - 40, '水盾！', def.color)
         break
       case 'magnet':
-        p.skill.active = 6
+        slot.active = 6
         this.addFloatText(p.x, p.y - 40, '磁力！', def.color)
         break
       case 'shockwave':
@@ -510,7 +522,7 @@ export class WorldScene implements Scene {
         this.skillBurst(340, 10, def.color, false, true)
         break
       case 'bloodlust':
-        p.skill.active = 8
+        slot.active = 8
         this.addFloatText(p.x, p.y - 40, '血刃！', def.color)
         break
       case 'arcane':
@@ -1147,10 +1159,7 @@ export class WorldScene implements Scene {
     ctx.restore()
 
     this.drawHud(ctx, game)
-    drawControls(ctx, game.input, width, height, {
-      kind: this.player.skill.kind,
-      cd: this.player.skill.cd,
-    })
+    drawControls(ctx, game.input, width, height, this.player.skills)
   }
 
   private drawFloatTexts(ctx: CanvasRenderingContext2D): void {
@@ -1183,14 +1192,22 @@ export class WorldScene implements Scene {
     ctx.fillText(`HP ${Math.max(0, Math.ceil(this.player.hp))}`, 26, 26)
     ctx.textBaseline = 'alphabetic'
 
-    // 当前技能与冷却（HP 条右侧）
-    if (this.player.skill.kind) {
-      const def = SKILL_DEFS[this.player.skill.kind]
-      const cd = Math.ceil(this.player.skill.cd)
+    // 技能栏概览（HP 条右侧，键盘玩家参考；手机有实体技能钮）
+    const owned = this.player.skills.filter((s) => s.kind)
+    if (owned.length > 0) {
       ctx.font = 'bold 13px system-ui, sans-serif'
       ctx.textAlign = 'left'
-      ctx.fillStyle = def.color
-      ctx.fillText(`技能 ${def.name}${cd > 0 ? ` ${cd}s` : ' · R'}`, 218, 26)
+      let sx = 218
+      const keyBySlot = ['Q', 'E', 'R']
+      this.player.skills.forEach((s, i) => {
+        if (!s.kind) return
+        const def = SKILL_DEFS[s.kind]
+        const cd = Math.ceil(s.cd)
+        ctx.fillStyle = def.color
+        const label = `${def.name}${cd > 0 ? `${cd}s` : keyBySlot[i]}`
+        ctx.fillText(label, sx, 26)
+        sx += ctx.measureText(label).width + 14
+      })
     }
 
     // 区域与状态
