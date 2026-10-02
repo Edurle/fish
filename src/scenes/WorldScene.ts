@@ -1268,9 +1268,9 @@ export class WorldScene implements Scene {
     ctx.fillText(`HP ${Math.max(0, Math.ceil(this.player.hp))}`, 26, 26)
     ctx.textBaseline = 'alphabetic'
 
-    // 技能栏概览（HP 条右侧，键盘玩家参考；手机有实体技能钮）
+    // 技能栏概览（HP 条右侧，宽屏/键盘玩家参考；窄屏有实体技能钮）
     const owned = this.player.skills.filter((s) => s.kind)
-    if (owned.length > 0) {
+    if (owned.length > 0 && game.width >= 480) {
       ctx.font = 'bold 13px system-ui, sans-serif'
       ctx.textAlign = 'left'
       let sx = 218

@@ -37,21 +37,18 @@ export class Game {
     this.scenes.change('title')
 
     window.addEventListener('resize', () => this.resize())
-    window.addEventListener('orientationchange', () => this.resize())
+    window.addEventListener('orientationchange', () => this.scheduleResize())
+    // iOS 地址栏收展与旋转时 visualViewport 才是真实可见区
+    window.visualViewport?.addEventListener('resize', () => this.resize())
     // 安全区探针：读取 env(safe-area-inset-*)（viewport-fit=cover + standalone 模式生效）
     this.safeProbe = document.createElement('div')
     this.safeProbe.style.cssText =
       'position:fixed;top:0;left:0;right:0;width:100vw;height:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);visibility:hidden;pointer-events:none'
     document.body.appendChild(this.safeProbe)
-    // 触摸设备：任意首次点按进入全屏并尝试锁定横屏（须在用户手势事件内同步请求）
+    // 触摸设备：任意首次点按进入全屏（须在用户手势事件内同步请求；横竖屏均可游玩）
     this.canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch' && !document.fullscreenElement) {
         void document.documentElement.requestFullscreen?.().catch(() => {})
-        // 实验性 API：部分浏览器（iOS Safari）不支持锁定，失败即忽略
-        const orientation = screen.orientation as ScreenOrientation & {
-          lock?: (o: string) => Promise<void>
-        }
-        orientation.lock?.('landscape').catch(() => {})
       }
     })
     this.resize()
@@ -69,11 +66,21 @@ export class Game {
     cancelAnimationFrame(this.rafId)
   }
 
+  /** 旋转后 iOS 的视口尺寸更新有延迟：稍后复测一次 */
+  private scheduleResize(): void {
+    this.resize()
+    for (const delay of [150, 400, 900]) {
+      window.setTimeout(() => this.resize(), delay)
+    }
+  }
+
   /** 按设备像素比设置画布，保证高分屏/手机上渲染清晰 */
   private resize(): void {
     const dpr = window.devicePixelRatio || 1
-    this.width = window.innerWidth
-    this.height = window.innerHeight
+    // visualViewport 为真实可见区（不含 Safari 地址栏/工具条），避免拉伸与按钮出屏
+    const vv = window.visualViewport
+    this.width = Math.round(vv?.width ?? window.innerWidth)
+    this.height = Math.round(vv?.height ?? window.innerHeight)
     // 设置 canvas.width 会重置变换矩阵，因此每次都要重设 dpr 缩放
     this.canvas.width = Math.round(this.width * dpr)
     this.canvas.height = Math.round(this.height * dpr)
@@ -91,39 +98,7 @@ export class Game {
     this.lastTime = now
     this.scenes.update(dt)
     this.scenes.render()
-    this.drawPortraitOverlay()
     this.input.endFrame()
     this.rafId = requestAnimationFrame(this.loop)
-  }
-
-  /** 触摸设备竖屏时全屏遮罩提示旋转（横屏锁定不被支持的浏览器 fallback） */
-  private drawPortraitOverlay(): void {
-    const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    if (!touch || this.width > this.height * 1.05) return
-    const ctx = this.ctx
-    ctx.fillStyle = 'rgba(4, 14, 26, 0.94)'
-    ctx.fillRect(0, 0, this.width, this.height)
-    // 旋转的手机示意
-    ctx.save()
-    ctx.translate(this.width / 2, this.height * 0.4)
-    ctx.rotate(Math.sin(performance.now() / 500) * 0.4 - Math.PI / 2)
-    ctx.strokeStyle = '#7fd8ff'
-    ctx.lineWidth = 5
-    ctx.lineJoin = 'round'
-    const w = Math.min(this.width * 0.3, 96)
-    ctx.strokeRect(-w / 2, -w * 0.9, w, w * 1.8)
-    ctx.fillStyle = '#7fd8ff'
-    ctx.beginPath()
-    ctx.arc(0, w * 0.66, 6, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-    ctx.fillStyle = '#eaf6ff'
-    ctx.font = 'bold 22px system-ui, sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('请旋转手机至横屏游玩', this.width / 2, this.height * 0.64)
-    ctx.font = '14px system-ui, sans-serif'
-    ctx.fillStyle = 'rgba(234, 246, 255, 0.6)'
-    ctx.fillText('大鱼吃小鱼 · 开放世界', this.width / 2, this.height * 0.64 + 30)
-    ctx.textAlign = 'left'
   }
 }

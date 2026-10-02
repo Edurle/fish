@@ -4,7 +4,6 @@
   "description": "开放世界吞噬进化：吃肉成长、收集圣物、挑战精英与 Boss",
   "start_url": "/",
   "display": "fullscreen",
-  "orientation": "landscape",
   "background_color": "#04263f",
   "theme_color": "#04263f",
   "icons": [
